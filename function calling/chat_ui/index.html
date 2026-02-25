@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Task Agent Chat</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #f0f2f5;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+      }
+
+      .chat-container {
+        width: 480px;
+        height: 680px;
+        background: #fff;
+        border-radius: 16px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+
+      .chat-header {
+        background: #4f46e5;
+        color: #fff;
+        padding: 18px 20px;
+        font-size: 16px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .chat-header .dot {
+        width: 10px;
+        height: 10px;
+        background: #a5f3a5;
+        border-radius: 50%;
+      }
+
+      .messages {
+        flex: 1;
+        overflow-y: auto;
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .message {
+        max-width: 80%;
+        padding: 10px 14px;
+        border-radius: 14px;
+        font-size: 14px;
+        line-height: 1.5;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+
+      .message.user {
+        align-self: flex-end;
+        background: #4f46e5;
+        color: #fff;
+        border-bottom-right-radius: 4px;
+      }
+
+      .message.agent {
+        align-self: flex-start;
+        background: #f1f0fe;
+        color: #1e1b4b;
+        border-bottom-left-radius: 4px;
+      }
+
+      .message.error {
+        align-self: flex-start;
+        background: #fee2e2;
+        color: #991b1b;
+        border-bottom-left-radius: 4px;
+      }
+
+      .typing {
+        align-self: flex-start;
+        background: #f1f0fe;
+        color: #6b7280;
+        padding: 10px 16px;
+        border-radius: 14px;
+        border-bottom-left-radius: 4px;
+        font-size: 13px;
+        font-style: italic;
+      }
+
+      .input-row {
+        display: flex;
+        padding: 14px 16px;
+        gap: 10px;
+        border-top: 1px solid #e5e7eb;
+        background: #fff;
+      }
+
+      .input-row input {
+        flex: 1;
+        padding: 10px 14px;
+        border: 1px solid #d1d5db;
+        border-radius: 24px;
+        font-size: 14px;
+        outline: none;
+        transition: border 0.2s;
+      }
+
+      .input-row input:focus {
+        border-color: #4f46e5;
+      }
+
+      .input-row button {
+        background: #4f46e5;
+        color: #fff;
+        border: none;
+        border-radius: 24px;
+        padding: 10px 20px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+
+      .input-row button:hover:not(:disabled) {
+        background: #4338ca;
+      }
+
+      .input-row button:disabled {
+        background: #a5b4fc;
+        cursor: not-allowed;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const API_URL = "http://127.0.0.1:8000/chat";
+
+      function App() {
+        const [messages, setMessages] = React.useState([
+          {
+            role: "agent",
+            text: "Hi! I'm your task management assistant. You can ask me to add, list, update, or delete tasks.",
+          },
+        ]);
+        const [input, setInput] = React.useState("");
+        const [loading, setLoading] = React.useState(false);
+        const bottomRef = React.useRef(null);
+
+        React.useEffect(() => {
+          bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+        }, [messages, loading]);
+
+        async function sendMessage() {
+          const text = input.trim();
+          if (!text || loading) return;
+
+          setInput("");
+          setMessages((prev) => [...prev, { role: "user", text }]);
+          setLoading(true);
+
+          try {
+            const res = await fetch(API_URL, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ message: text }),
+            });
+
+            const data = await res.json();
+
+            if (!res.ok) {
+              throw new Error(data.detail || "Server error");
+            }
+
+            setMessages((prev) => [...prev, { role: "agent", text: data.reply }]);
+          } catch (err) {
+            setMessages((prev) => [
+              ...prev,
+              { role: "error", text: "Error: " + err.message },
+            ]);
+          } finally {
+            setLoading(false);
+          }
+        }
+
+        function handleKeyDown(e) {
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+          }
+        }
+
+        return (
+          <div className="chat-container">
+            <div className="chat-header">
+              <div className="dot" />
+              Task Agent
+            </div>
+
+            <div className="messages">
+              {messages.map((msg, i) => (
+                <div key={i} className={`message ${msg.role}`}>
+                  {msg.text}
+                </div>
+              ))}
+              {loading && <div className="typing">Agent is thinking...</div>}
+              <div ref={bottomRef} />
+            </div>
+
+            <div className="input-row">
+              <input
+                type="text"
+                placeholder='e.g. "Add a bug task called Login crash"'
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                disabled={loading}
+              />
+              <button onClick={sendMessage} disabled={loading || !input.trim()}>
+                Send
+              </button>
+            </div>
+          </div>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    </script>
+  </body>
+</html>
